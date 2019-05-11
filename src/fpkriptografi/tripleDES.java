@@ -1,172 +1,198 @@
-import java.io.DataInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.security.InvalidKeyException;
-import java.security.NoSuchAlgorithmException;
-import java.security.Provider;
-import java.security.Security;
-import java.security.spec.InvalidKeySpecException;
+package fpkriptografi;
 
-import javax.crypto.BadPaddingException;
 import javax.crypto.Cipher;
-import javax.crypto.CipherOutputStream;
-import javax.crypto.IllegalBlockSizeException;
-import javax.crypto.KeyGenerator;
-import javax.crypto.NoSuchPaddingException;
-import javax.crypto.SecretKey;
-import javax.crypto.SecretKeyFactory;
-import javax.crypto.spec.DESedeKeySpec;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
- * This class defines methods for encrypting and decrypting using the Triple DES
- * algorithm and for generating, reading and writing Triple DES keys. It also
- * defines a main() method that allows these methods to be used from the command
- * line.
+ * Encrypt/Decrypt text2text by using Triple-DES
+ * 
+ * @author Tom Misawa (riversun.org@gmail.com)
  */
-public class TripleDES {
-  /**
-   * The program. The first argument must be -e, -d, or -g to encrypt,
-   * decrypt, or generate a key. The second argument is the name of a file
-   * from which the key is read or to which it is written for -g. The -e and
-   * -d arguments cause the program to read from standard input and encrypt or
-   * decrypt to standard output.
-   */
-  public static void main(String[] args) {
-    try {
-      // Check to see whether there is a provider that can do TripleDES
-      // encryption. If not, explicitly install the SunJCE provider.
-      try {
-        Cipher c = Cipher.getInstance("DESede");
-      } catch (Exception e) {
-        // An exception here probably means the JCE provider hasn't
-        // been permanently installed on this system by listing it
-        // in the $JAVA_HOME/jre/lib/security/java.security file.
-        // Therefore, we have to install the JCE provider explicitly.
-        System.err.println("Installing SunJCE provider.");
-        Provider sunjce = new com.sun.crypto.provider.SunJCE();
-        Security.addProvider(sunjce);
-      }
+public class tripleDES {
 
-      // This is where we'll read the key from or write it to
-      File keyfile = new File(args[1]);
+    private static final String CRYPT_ALGORITHM = "DESede";
+    private static final String PADDING = "DESede/CBC/NoPadding";
+    private static final String CHAR_ENCODING = "UTF-8";
 
-      // Now check the first arg to see what we're going to do
-      if (args[0].equals("-g")) { // Generate a key
-        System.out.print("Generating key. This may take some time...");
-        System.out.flush();
-        SecretKey key = generateKey();
-        writeKey(key, keyfile);
-        System.out.println("done.");
-        System.out.println("Secret key written to " + args[1]
-            + ". Protect that file carefully!");
-      } else if (args[0].equals("-e")) { // Encrypt stdin to stdout
-        SecretKey key = readKey(keyfile);
-        encrypt(key, System.in, System.out);
-      } else if (args[0].equals("-d")) { // Decrypt stdin to stdout
-        SecretKey key = readKey(keyfile);
-        decrypt(key, System.in, System.out);
-      }
-    } catch (Exception e) {
-      System.err.println(e);
-      System.err.println("Usage: java " + TripleDES.class.getName()
-          + " -d|-e|-g <keyfile>");
-    }
-  }
+    private static final byte[] MY_KEY = "5oquil2oo2vb63e8ionujny6".getBytes();//24-byte
+    private static final byte[] MY_IV = "3oco1v52".getBytes();//8-byte
 
-  /** Generate a secret TripleDES encryption/decryption key */
-  public static SecretKey generateKey() throws NoSuchAlgorithmException {
-    // Get a key generator for Triple DES (a.k.a DESede)
-    KeyGenerator keygen = KeyGenerator.getInstance("DESede");
-    // Use it to generate a key
-    return keygen.generateKey();
-  }
+    public static void main(String[] args) {
 
-  /** Save the specified TripleDES SecretKey to the specified file */
-  public static void writeKey(SecretKey key, File f) throws IOException,
-      NoSuchAlgorithmException, InvalidKeySpecException {
-    // Convert the secret key to an array of bytes like this
-    SecretKeyFactory keyfactory = SecretKeyFactory.getInstance("DESede");
-    DESedeKeySpec keyspec = (DESedeKeySpec) keyfactory.getKeySpec(key,
-        DESedeKeySpec.class);
-    byte[] rawkey = keyspec.getKey();
+        //must be multiple of 8
+        String srcText = "01234567";
 
-    // Write the raw key to the file
-    FileOutputStream out = new FileOutputStream(f);
-    out.write(rawkey);
-    out.close();
-  }
+        // create crypter
+        final tripleDES crypter = new tripleDES();
 
-  /** Read a TripleDES secret key from the specified file */
-  public static SecretKey readKey(File f) throws IOException,
-      NoSuchAlgorithmException, InvalidKeyException,
-      InvalidKeySpecException {
-    // Read the raw bytes from the keyfile
-    DataInputStream in = new DataInputStream(new FileInputStream(f));
-    byte[] rawkey = new byte[(int) f.length()];
-    in.readFully(rawkey);
-    in.close();
+        // do encrypt
+        String encryptedText = crypter.encrypt(srcText);
 
-    // Convert the raw bytes to a secret key like this
-    DESedeKeySpec keyspec = new DESedeKeySpec(rawkey);
-    SecretKeyFactory keyfactory = SecretKeyFactory.getInstance("DESede");
-    SecretKey key = keyfactory.generateSecret(keyspec);
-    return key;
-  }
+        // show result
+        System.out.println("sourceText=" + srcText + " -> encryptedText=" + encryptedText + "\n");
 
-  /**
-   * Use the specified TripleDES key to encrypt bytes from the input stream
-   * and write them to the output stream. This method uses CipherOutputStream
-   * to perform the encryption and write bytes at the same time.
-   */
-  public static void encrypt(SecretKey key, InputStream in, OutputStream out)
-      throws NoSuchAlgorithmException, InvalidKeyException,
-      NoSuchPaddingException, IOException {
-    // Create and initialize the encryption engine
-    Cipher cipher = Cipher.getInstance("DESede");
-    cipher.init(Cipher.ENCRYPT_MODE, key);
-
-    // Create a special output stream to do the work for us
-    CipherOutputStream cos = new CipherOutputStream(out, cipher);
-
-    // Read from the input and write to the encrypting output stream
-    byte[] buffer = new byte[2048];
-    int bytesRead;
-    while ((bytesRead = in.read(buffer)) != -1) {
-      cos.write(buffer, 0, bytesRead);
-    }
-    cos.close();
-
-    // For extra security, don't leave any plaintext hanging around memory.
-    java.util.Arrays.fill(buffer, (byte) 0);
-  }
-
-  /**
-   * Use the specified TripleDES key to decrypt bytes ready from the input
-   * stream and write them to the output stream. This method uses uses Cipher
-   * directly to show how it can be done without CipherInputStream and
-   * CipherOutputStream.
-   */
-  public static void decrypt(SecretKey key, InputStream in, OutputStream out)
-      throws NoSuchAlgorithmException, InvalidKeyException, IOException,
-      IllegalBlockSizeException, NoSuchPaddingException,
-      BadPaddingException {
-    // Create and initialize the decryption engine
-    Cipher cipher = Cipher.getInstance("DESede");
-    cipher.init(Cipher.DECRYPT_MODE, key);
-
-    // Read bytes, decrypt, and write them out.
-    byte[] buffer = new byte[2048];
-    int bytesRead;
-    while ((bytesRead = in.read(buffer)) != -1) {
-      out.write(cipher.update(buffer, 0, bytesRead));
+        System.out.println("encrypted-text=" + encryptedText + " -> decrypted-text(source text)="
+                + crypter.decrypt(encryptedText));
     }
 
-    // Write out the final bunch of decrypted bytes
-    out.write(cipher.doFinal());
-    out.flush();
-  }
+    /**
+     * Encrypt text to encrypted-text
+     * 
+     * @param text
+     * @return
+     */
+    public String encrypt(String text) {
+
+        if (text == null) {
+            return null;
+        }
+
+        String retVal = null;
+
+        try {
+
+            final SecretKeySpec secretKeySpec = new SecretKeySpec(MY_KEY, CRYPT_ALGORITHM);
+
+            final IvParameterSpec iv = new IvParameterSpec(MY_IV);
+
+            final Cipher cipher = Cipher.getInstance(PADDING);
+
+            cipher.init(Cipher.ENCRYPT_MODE, secretKeySpec, iv);
+
+            final byte[] encrypted = cipher.doFinal(text.getBytes(CHAR_ENCODING));
+
+            retVal = new String(encodeHex(encrypted));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return retVal;
+    }
+
+    /**
+     * Decrypt encrypted-text
+     * 
+     * @param text
+     * @return
+     */
+    public String decrypt(String text) {
+
+        if (text == null) {
+            return null;
+        }
+
+        String retVal = null;
+
+        try {
+
+            final SecretKeySpec secretKeySpec = new SecretKeySpec(MY_KEY, CRYPT_ALGORITHM);
+            final IvParameterSpec iv = new IvParameterSpec(MY_IV);
+
+            final Cipher cipher = Cipher.getInstance(PADDING);
+
+            cipher.init(Cipher.DECRYPT_MODE, secretKeySpec, iv);
+
+            final byte[] decrypted = cipher.doFinal(decodeHex(text.toCharArray()));
+
+            retVal = new String(decrypted, CHAR_ENCODING);
+
+        } catch (Exception e) {
+
+            e.printStackTrace();
+        }
+
+        return retVal;
+    }
+
+    /**
+     * 
+     * Converts an array of characters representing hexadecimal values into an array
+     * of bytes of those same values. The returned array will be half the length of
+     * the passed array, as it takes two characters to represent any given byte. An
+     * exception is thrown if the passed char array has an odd number of elements.
+     * <br>
+     * Portion of Apache Software Foundation
+     * 
+     * @param data
+     *            An array of characters containing hexadecimal digits
+     * @return A byte array containing binary data decoded from the supplied char
+     *         array.
+     * @throws Exception
+     *             Thrown if an odd number or illegal of characters is supplied
+     * 
+     * 
+     */
+    private byte[] decodeHex(char[] data) throws Exception {
+
+        int len = data.length;
+
+        if ((len & 0x01) != 0) {
+            throw new Exception("Odd number of characters.");
+        }
+
+        byte[] out = new byte[len >> 1];
+
+        // two characters form the hex value.
+        for (int i = 0, j = 0; j < len; i++) {
+
+            int f = toDigit(data[j], j) << 4;
+            j++;
+            f = f | toDigit(data[j], j);
+            j++;
+            out[i] = (byte) (f & 0xFF);
+        }
+
+        return out;
+    }
+
+    /**
+     * Converts a hexadecimal character to an integer. <br>
+     * Portion of Apache Software Foundation
+     * 
+     * @param ch
+     *            A character to convert to an integer digit
+     * @param index
+     *            The index of the character in the source
+     * @return An integer
+     * @throws Exception
+     *             Thrown if ch is an illegal hex character
+     */
+    private int toDigit(char ch, int index) throws Exception {
+        int digit = Character.digit(ch, 16);
+        if (digit == -1) {
+            throw new Exception("Illegal hexadecimal character " + ch + " at index " + index);
+        }
+        return digit;
+    }
+
+    /**
+     * Converts an array of bytes into an array of characters representing the
+     * hexadecimal values of each byte in order. The returned array will be double
+     * the length of the passed array, as it takes two characters to represent any
+     * given byte. <br>
+     * Portion of Apache Software Foundation
+     * 
+     * @param data
+     *            a byte[] to convert to Hex characters
+     * @param toDigits
+     *            the output alphabet
+     * @return A char[] containing hexadecimal characters
+     * 
+     * 
+     */
+    private char[] encodeHex(byte[] data) {
+
+        final char[] DIGITS = { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+
+        int l = data.length;
+        char[] out = new char[l << 1];
+        // two characters form the hex value.
+        for (int i = 0, j = 0; i < l; i++) {
+            out[j++] = DIGITS[(0xF0 & data[i]) >>> 4];
+            out[j++] = DIGITS[0x0F & data[i]];
+        }
+        return out;
+    }
 }
